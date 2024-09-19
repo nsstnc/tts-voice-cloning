@@ -1,0 +1,11 @@
+python-docx
+pygame
+pydub
+inflect
+noisereduce
+soundfile
+scipy
+numpy
+coqui-tts
+num2words
+cx-Freeze
