@@ -6,6 +6,11 @@ noisereduce
 soundfile
 scipy
 numpy
-coqui-tts
+torch
+TTS
 num2words
 cx-Freeze
+
+bark
+nltk
+transformers

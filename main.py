@@ -46,6 +46,9 @@ def select_save_location():
 
 
 def run_script():
+    # Делаем кнопку неактивной
+    run_button.config(state="disabled")
+
     global stop_execution
     stop_execution = False
 
@@ -55,7 +58,7 @@ def run_script():
     need_compression = compression_var.get()
     selected_sample = selected_sample_var.get()
     pause_duration = pause_var.get()
-
+    need_pause = need_pause_var.get()
 
     if len(selected_file) == 0 or "Файл: " in selected_file:
         messagebox.showerror("Ошибка", "Выберите файл для обработки.")
@@ -88,12 +91,19 @@ def run_script():
             output_filepath = selected_folder + f"/{name}{index + 1}.wav"
             if not stop_execution:
                 # синтез голоса
-                tts.synthesize_and_save(paragraph, output_filepath, pause_duration)
+                tts.synthesize_and_save(paragraph, output_filepath, pause_duration if need_pause else None)
+
+                # конверсия голоса
+                status_var.set("Конверсия...")
+                tts.voice_conversion(output_filepath)
+
                 voice = VoiceEnhancer(output_filepath)
 
-                status_var.set("Фильтрация частот...")
-                # фильтрация частот
-                voice.filtering()
+
+
+                # status_var.set("Фильтрация частот...")
+                # # фильтрация частот
+                # voice.filtering()
 
                 # обработка голоса
                 status_var.set("Удаление шумов...")
@@ -122,6 +132,8 @@ def run_script():
         # Запросить переход в папку сохранения
         if messagebox.askyesno("Готово", f"Файлы сохранены в: {selected_folder}. Перейти в папку?"):
             os.startfile(selected_folder)
+        # Делаем кнопку снова активной
+        run_button.config(state="normal")
 
 
 def format_time(seconds):
@@ -144,7 +156,9 @@ def update_time_display(start_time):
     if (status_var.get() == "Выполняется..." or
             status_var.get() == "Удаление шумов..." or
             status_var.get() == "Фильтрация частот..." or
-            status_var.get() == "Компрессия динамического\n диапазона..."):
+            status_var.get() == "Компрессия динамического\n диапазона..." or
+            status_var.get() == "Конверсия..."
+            ):
         root.after(1000, update_time_display, start_time)
 
 
@@ -165,6 +179,13 @@ def on_checkbox_toggle():
     if compression_var.get():  # Если чекбокс установлен
         show_info()
 
+def on_pause_checkbox_toggle():
+    if need_pause_var.get():
+        pause_label.grid()  # Восстанавливаем элемент
+        pause_scale.grid()  # Восстанавливаем ползунок
+    else:
+        pause_label.grid_remove()  # Убираем элемент
+        pause_scale.grid_remove()  # Убираем ползунок
 
 def show_value(value):
     pause_label.config(text=f"Паузы: {value} мс")
@@ -270,14 +291,21 @@ selected_sample_var = tk.StringVar(value=sample_files[0])
 sample_menu = tk.OptionMenu(left_down_header, selected_sample_var, *[f for f in sample_files])
 sample_menu.grid(row=2, column=1, padx=10, pady=5, sticky="w")
 
-pause_var = tk.IntVar(value=0)
-pause_label = tk.Label(left_down_header, text="Паузы: 0 мс")
-pause_label.grid(row=3, column=0, padx=10, pady=5, sticky="w")
+# Чекбокс для параметра "Изменить стандартный темп"
+need_pause_label = tk.Label(left_down_header, text="Изменить стандартный темп:")
+need_pause_label.grid(row=3, column=0, padx=10, pady=5, sticky="w")
+need_pause_var = BooleanVar(value=False)
+need_pause_checkbox = tk.Checkbutton(left_down_header, variable=need_pause_var, command=on_pause_checkbox_toggle)
+need_pause_checkbox.grid(row=3, column=1, padx=10, pady=5, sticky="w")
 
-pause_scale = tk.Scale(left_down_header, from_=0, to=500, orient='horizontal', resolution=50, showvalue=False, command=show_value)
-pause_scale.grid(row=3, column=1, padx=10, pady=5, sticky="w")
-
-
+# параметр для выбора задержки
+pause_var = tk.IntVar(value=200)
+pause_label = tk.Label(left_down_header, text="Паузы: 200 мс")
+pause_label.grid(row=4, column=0, padx=10, pady=5, sticky="w")
+pause_label.grid_remove()  # Убираем элемент
+pause_scale = tk.Scale(left_down_header, from_=0, to=500, orient='horizontal', resolution=50, showvalue=False, command=show_value, variable=pause_var)
+pause_scale.grid(row=4, column=1, padx=10, pady=5, sticky="w")
+pause_scale.grid_remove()  # Убираем ползунок
 
 # кнопка воспроизведения сэмпла
 play_button = tk.Button(left_down_footer, text=f"Прослушать", command=lambda: play_sample(selected_sample_var.get()))

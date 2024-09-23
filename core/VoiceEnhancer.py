@@ -68,20 +68,33 @@ class VoiceEnhancer:
         # Сохраняем отфильтрованное аудио
         wavfile.write(self.filepath, fs, filtered_data.astype(data.dtype))
 
-
-
-
-
     def compressing(self):
         # Загружаем файл
         audio = AudioSegment.from_file(self.filepath)
-
         # Применяем компрессию
-        compressed_audio = compress_dynamic_range(audio)
+        compressed_audio = compress_dynamic_range(audio, threshold=-12, ratio=4.0, attack=10, release=100)
 
-        # Сохраняем результат
-        compressed_audio.export(self.filepath, format="wav")
+        limited_audio = self.apply_limiting(compressed_audio)
 
+        limited_audio.export(self.filepath, format="wav")
 
+    def apply_limiting(self, audio_segment: AudioSegment, max_db=-1.0):
+        # Преобразуем аудиосигнал в массив
+        samples = np.array(audio_segment.get_array_of_samples())
 
+        # Конвертируем dB в линейное значение
+        max_amplitude = 10 ** (max_db / 20.0)
+
+        # Ограничиваем амплитуду
+        limited_samples = np.clip(samples, -max_amplitude * 32768, max_amplitude * 32767)
+
+        # Создаем новый аудиосегмент
+        limited_audio = AudioSegment(
+            data=limited_samples.astype(np.int16).tobytes(),
+            sample_width=audio_segment.sample_width,
+            frame_rate=audio_segment.frame_rate,
+            channels=audio_segment.channels
+        )
+
+        return limited_audio
 

@@ -18,7 +18,7 @@ options = {
             ("icon/icon.ico", "icon.ico"),
             "voices/",
         ],
-        "include_path":
+
     }
 }
 
