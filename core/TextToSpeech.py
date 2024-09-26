@@ -1,19 +1,31 @@
 from TTS.api import TTS
 import torch
-from .Text import Text
+from TTS.utils.synthesizer import Synthesizer
+from TTS.config import load_config
 from pydub import AudioSegment
 import re
 import os
 import tempfile
 
 class TextToSpeech:
-    def __init__(self, speaker_path: str) -> None:
+    def __init__(self, speaker_path: str, model_and_config_folder_path: str) -> None:
         # Определяем устройство (GPU или CPU)
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # Загружаем модель
+        # Встроенная быстрая модель, но с худшим качеством клонирования
         # self.tts = TTS("tts_models/multilingual/multi-dataset/your_tts").to(device)
-        self.tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+        # встроенная долгая модель, но с лучшим качеством клонирования
+        # self.tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+
+        # собственная модель обученная на основе заданного голоса и xtts
+        config_path = model_and_config_folder_path + "\config.json"
+
+        model_path = model_and_config_folder_path
+        # Загружаем обученную модель
+        self.tts = Synthesizer(model_path, config_path, use_cuda=torch.cuda.is_available())
+
+
+        # модель конверсии к необходимому голосу
         self.tts_convertion = TTS("voice_conversion_models/multilingual/vctk/freevc24").to(device)
         self.speaker_path = speaker_path
 
@@ -36,39 +48,62 @@ class TextToSpeech:
             print("Пустой абзац")
         else:
             if pause_duration == None:
-                self.tts.tts_to_file(text=text,
-                                     file_path=output_path,
-                                     speaker_wav=self.speaker_path,
-                                     language="en"
+                # self.tts.tts_to_file(text=text,
+                #                      file_path=output_path,
+                #                      speaker_wav=self.speaker_path,
+                #                      language="en"
+                #                      )
+
+                wav = self.tts.tts(text=text,
+                                    # file_path=output_path,
+                                    speaker_wav=self.speaker_path,
+                                    language_name="en",
+                                    speaker_name=None,
                                      )
+                self.tts.save_wav(wav, output_path)
                 print("Синтез завершен")
             else:
-                pause = AudioSegment.silent(duration=pause_duration)
-                text = self._split_text_by_punctuation(text=text)
+                wav = self.tts.tts(text=text,
+                                   # file_path=output_path,
+                                   speaker_wav=self.speaker_path,
+                                   language_name="en",
+                                   speaker_name=None,
+                                   )
+                self.tts.save_wav(wav, output_path)
+                self._split_on_silence(output_path, pause_duration)
 
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    print(f"Временная папка создана: {temp_dir}")
-                    # записываем синтезированные куски во временную папку
-                    for index, fragment in enumerate(text):
-                        print(fragment)
-                        if len(fragment) != 0:
-                            temp_file_path = os.path.join(temp_dir, f"{index}.wav")
-                            self.tts.tts_to_file(text=fragment,
-                                                 file_path=temp_file_path,
-                                                 speaker_wav=self.speaker_path,
-                                                 language="en"
-                                                 )
-
-                    files = sorted(os.listdir(temp_dir), key=lambda x: int(x.split('.')[0]))
-
-                    output_audio = AudioSegment.from_wav(os.path.join(temp_dir, files[0]))
-                    # проходимся по синтезированным кускам и соединяем их с паузами
-                    for file in files[1:]:
-                        file_path = os.path.join(temp_dir, file)
-                        audio = AudioSegment.from_wav(file_path)
-                        output_audio += pause + audio
-
-                    output_audio.export(output_path, format="wav")
+                # СТАРЫЙ ВАРИАНТ РАЗБИТИЯ ПО ЗНАКАМ ПРЕПИНАНИЯ И ОЗВУЧКА ПО ОТДЕЛЬНОСТИ
+                # text = self._split_text_by_punctuation(text=text)
+                #
+                # with tempfile.TemporaryDirectory() as temp_dir:
+                #     print(f"Временная папка создана: {temp_dir}")
+                #     # записываем синтезированные куски во временную папку
+                #     for index, fragment in enumerate(text):
+                #         if len(fragment) != 0:
+                #             temp_file_path = os.path.join(temp_dir, f"{index}.wav")
+                #             # self.tts.tts_to_file(text=fragment,
+                #             #                      file_path=temp_file_path,
+                #             #                      speaker_wav=self.speaker_path,
+                #             #                      language="en"
+                #             #                      )
+                #             wav = self.tts.tts(text=fragment,
+                #                                # file_path=output_path,
+                #                                speaker_wav=self.speaker_path,
+                #                                language_name="en",
+                #                                speaker_name=None,
+                #                                )
+                #             self.tts.save_wav(wav, temp_file_path)
+                #
+                #     files = sorted(os.listdir(temp_dir), key=lambda x: int(x.split('.')[0]))
+                #     print(files)
+                #     output_audio = AudioSegment.from_wav(os.path.join(temp_dir, files[0]))
+                #     # проходимся по синтезированным кускам и соединяем их с паузами
+                #     for file in files[1:]:
+                #         file_path = os.path.join(temp_dir, file)
+                #         audio = AudioSegment.from_wav(file_path)
+                #         output_audio += pause + audio
+                #
+                #     output_audio.export(output_path, format="wav")
 
     def voice_conversion(self, output_path: str) -> None:
         # Загрузка исходного аудиофайла
@@ -113,3 +148,22 @@ class TextToSpeech:
         )
         return processed_chunk_file
 
+
+    def _split_on_silence(self, file_path, pause_duration):
+        from pydub import AudioSegment
+        from pydub.silence import split_on_silence
+
+        sound = AudioSegment.from_wav(file_path)
+        loudness = sound.dBFS
+        max_loudness = sound.max_dBFS
+        print(loudness, max_loudness)
+        pause = AudioSegment.silent(duration=pause_duration)
+
+        chunks = split_on_silence(sound, min_silence_len=200, silence_thresh=loudness - 20, keep_silence=50)
+        print('Total segmentation:', len(chunks))
+
+        output_audio = chunks[0]
+        for i, chunk in enumerate(chunks[1:]):
+            output_audio += pause + chunk
+
+        output_audio.export(file_path.replace('.', "_splitted."), format="wav")

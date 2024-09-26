@@ -15,8 +15,8 @@ pygame.mixer.init()
 # Пути к сэмплам
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Путь к директории, где находится main.py
 SAMPLES_DIR = os.path.join(BASE_DIR, "voices")  # Путь к папке voices
-sample_files = [f for f in os.listdir(SAMPLES_DIR) if f.endswith('.wav') or f.endswith('.mp3')]
-
+MODELS_DIR = os.path.join(BASE_DIR, "models")
+sample_files = {f: os.path.join(MODELS_DIR, f.split('.')[0]) for f in os.listdir(SAMPLES_DIR) if f.endswith('.wav') or f.endswith('.mp3')}
 
 def play_sample(sample_path):
     try:
@@ -78,7 +78,7 @@ def run_script():
 
     try:
         text = Text(selected_file)
-        tts = TextToSpeech(os.path.join(SAMPLES_DIR, selected_sample))
+        tts = TextToSpeech(os.path.join(SAMPLES_DIR, selected_sample), sample_files[selected_sample])
         name = selected_file.split('/')[-1].split('.')[0]
 
         if split_by_paragraphs:
@@ -94,8 +94,8 @@ def run_script():
                 tts.synthesize_and_save(paragraph, output_filepath, pause_duration if need_pause else None)
 
                 # конверсия голоса
-                status_var.set("Конверсия...")
-                tts.voice_conversion(output_filepath)
+                # status_var.set("Конверсия...")
+                # tts.voice_conversion(output_filepath)
 
                 voice = VoiceEnhancer(output_filepath)
 
@@ -286,9 +286,9 @@ compression_checkbox.grid(row=1, column=1, padx=10, pady=5, sticky="w")
 # Выбор сэмпла для озвучки
 sample_label = tk.Label(left_down_header, text="Сэмплы для озвучки:")
 sample_label.grid(row=2, column=0, padx=10, pady=5, sticky="w")
-selected_sample_var = tk.StringVar(value=sample_files[0])
+selected_sample_var = tk.StringVar(value=list(sample_files.keys())[0])
 
-sample_menu = tk.OptionMenu(left_down_header, selected_sample_var, *[f for f in sample_files])
+sample_menu = tk.OptionMenu(left_down_header, selected_sample_var, *[f for f in sample_files.keys()])
 sample_menu.grid(row=2, column=1, padx=10, pady=5, sticky="w")
 
 # Чекбокс для параметра "Изменить стандартный темп"

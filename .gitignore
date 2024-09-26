@@ -3,3 +3,9 @@ texts/warm-bodies_700001.wav
 voices/
 datasets/
 venv/
+models/voice2/
+models/voice1/
+models/voice3/
+models/voice2.zip
+models/voice1.zip
+models/voice3.zip
